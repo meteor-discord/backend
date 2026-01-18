@@ -142,3 +142,8 @@ func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
 		log.Printf("failed to encode not implemented response: %v", err)
 	}
 }
+
+func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"error": "not implemented"})
+}
