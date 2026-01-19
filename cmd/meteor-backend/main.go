@@ -18,7 +18,6 @@ import (
 )
 
 func main() {
-	// Load .env file if it exists
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
 	}
@@ -35,12 +34,10 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Public routes (no auth required)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))
 	})
 
-	// Protected routes (auth required)
 	r.Group(func(r chi.Router) {
 		r.Use(authmw.Auth(apiKey))
 
