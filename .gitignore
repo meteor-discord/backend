@@ -1,4 +1,11 @@
 *
 !*/
 !*.*
+<<<<<<< Updated upstream
 .env
+||||||| Stash base
+=======
+
+*.env
+!.env.example
+>>>>>>> Stashed changes
