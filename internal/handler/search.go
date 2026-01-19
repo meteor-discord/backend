@@ -4,11 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
 )
 
+// LyricsProviderLRCLIB is the provider ID for LRCLIB lyrics service
+const LyricsProviderLRCLIB = 3
+
+// httpClient is a shared HTTP client with timeout for external API calls
+var httpClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
+
+// ApiResponse represents the standard API response format
 type ApiResponse struct {
 	Timings  string      `json:"timings"`
 	Response interface{} `json:"response"`
@@ -21,7 +31,9 @@ func writeApiResponse(w http.ResponseWriter, data interface{}, startTime time.Ti
 		Timings:  timings,
 		Response: map[string]interface{}{"body": data},
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode API response: %v", err)
+	}
 }
 
 func SearchWeather(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +48,7 @@ func SearchWeather(w http.ResponseWriter, r *http.Request) {
 	}
 
 	geoURL := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1", url.QueryEscape(query))
-	resp, err := http.Get(geoURL)
+	resp, err := httpClient.Get(geoURL)
 	if err != nil {
 		writeApiResponse(w, map[string]interface{}{
 			"status":  2,
@@ -71,7 +83,7 @@ func SearchWeather(w http.ResponseWriter, r *http.Request) {
 
 	geo := geoResult.Results[0]
 	weatherURL := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,relative_humidity_2m,apparent_temperature,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto", geo.Latitude, geo.Longitude)
-	weatherResp, err := http.Get(weatherURL)
+	weatherResp, err := httpClient.Get(weatherURL)
 	if err != nil {
 		writeApiResponse(w, map[string]interface{}{
 			"status":  2,
@@ -81,19 +93,96 @@ func SearchWeather(w http.ResponseWriter, r *http.Request) {
 	}
 	defer weatherResp.Body.Close()
 
-	body, _ := io.ReadAll(weatherResp.Body)
+	body, err := io.ReadAll(weatherResp.Body)
+	if err != nil {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "failed to read weather response",
+		}, startTime)
+		return
+	}
 
 	var weatherData map[string]interface{}
-	json.Unmarshal(body, &weatherData)
+	if err := json.Unmarshal(body, &weatherData); err != nil {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "failed to parse weather response",
+		}, startTime)
+		return
+	}
 
-	current := weatherData["current"].(map[string]interface{})
-	daily := weatherData["daily"].(map[string]interface{})
-	dailyTime := daily["time"].([]interface{})
-	dailyWeatherCode := daily["weather_code"].([]interface{})
-	dailyTempMax := daily["temperature_2m_max"].([]interface{})
-	dailyTempMin := daily["temperature_2m_min"].([]interface{})
-	dailySunrise := daily["sunrise"].([]interface{})
-	dailySunset := daily["sunset"].([]interface{})
+	// Safe type assertions for weather data
+	current, ok := weatherData["current"].(map[string]interface{})
+	if !ok {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "unexpected weather response format (invalid current)",
+		}, startTime)
+		return
+	}
+
+	daily, ok := weatherData["daily"].(map[string]interface{})
+	if !ok {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "unexpected weather response format (invalid daily)",
+		}, startTime)
+		return
+	}
+
+	dailyTime, ok := daily["time"].([]interface{})
+	if !ok {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "unexpected weather response format (invalid daily time)",
+		}, startTime)
+		return
+	}
+
+	dailyWeatherCode, ok := daily["weather_code"].([]interface{})
+	if !ok {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "unexpected weather response format (invalid daily weather_code)",
+		}, startTime)
+		return
+	}
+
+	dailyTempMax, ok := daily["temperature_2m_max"].([]interface{})
+	if !ok {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "unexpected weather response format (invalid daily temperature_2m_max)",
+		}, startTime)
+		return
+	}
+
+	dailyTempMin, ok := daily["temperature_2m_min"].([]interface{})
+	if !ok {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "unexpected weather response format (invalid daily temperature_2m_min)",
+		}, startTime)
+		return
+	}
+
+	dailySunrise, ok := daily["sunrise"].([]interface{})
+	if !ok || len(dailySunrise) == 0 {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "unexpected weather response format (invalid daily sunrise)",
+		}, startTime)
+		return
+	}
+
+	dailySunset, ok := daily["sunset"].([]interface{})
+	if !ok || len(dailySunset) == 0 {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "unexpected weather response format (invalid daily sunset)",
+		}, startTime)
+		return
+	}
 
 	conditionLabels := map[int]string{
 		0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -104,6 +193,16 @@ func SearchWeather(w http.ResponseWriter, r *http.Request) {
 		80: "Slight rain showers", 81: "Moderate rain showers", 82: "Violent rain showers",
 		95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Thunderstorm with heavy hail",
 	}
+
+	// Safe type assertion for weather code
+	weatherCode := 0
+	if wc, ok := current["weather_code"].(float64); ok {
+		weatherCode = int(wc)
+	}
+
+	// Safe type assertions for sunrise/sunset
+	sunriseStr, _ := dailySunrise[0].(string)
+	sunsetStr, _ := dailySunset[0].(string)
 
 	writeApiResponse(w, map[string]interface{}{
 		"status": 0,
@@ -116,19 +215,19 @@ func SearchWeather(w http.ResponseWriter, r *http.Request) {
 				"temperature": map[string]interface{}{
 					"current":    current["temperature_2m"],
 					"feels_like": current["apparent_temperature"],
-					"max":        dailyTempMax[0],
-					"min":        dailyTempMin[0],
+					"max":        safeIndex(dailyTempMax, 0),
+					"min":        safeIndex(dailyTempMin, 0),
 				},
 				"condition": map[string]interface{}{
-					"label": conditionLabels[int(current["weather_code"].(float64))],
+					"label": conditionLabels[weatherCode],
 				},
 				"wind": map[string]interface{}{
 					"speed": current["wind_speed_10m"],
 				},
 				"humidity": current["relative_humidity_2m"],
 				"sun": map[string]interface{}{
-					"sunrise": parseTime(dailySunrise[0].(string)),
-					"sunset":  parseTime(dailySunset[0].(string)),
+					"sunrise": parseTime(sunriseStr),
+					"sunset":  parseTime(sunsetStr),
 				},
 			},
 			"forecast": buildForecast(dailyTime, dailyWeatherCode, dailyTempMax, dailyTempMin),
@@ -137,30 +236,49 @@ func SearchWeather(w http.ResponseWriter, r *http.Request) {
 	}, startTime)
 }
 
+func safeIndex(slice []interface{}, index int) interface{} {
+	if index >= 0 && index < len(slice) {
+		return slice[index]
+	}
+	return nil
+}
+
 func parseTime(s string) int64 {
-	t, _ := time.Parse("2006-01-02T15:04", s)
+	t, err := time.Parse("2006-01-02T15:04", s)
+	if err != nil {
+		return 0
+	}
 	return t.UnixMilli()
 }
 
 func buildForecast(dailyTime []interface{}, dailyWeatherCode []interface{}, dailyTempMax []interface{}, dailyTempMin []interface{}) []interface{} {
 	var forecast []interface{}
 	now := time.Now()
+	tomorrow := now.AddDate(0, 0, 1)
+
 	for i := 0; i < 7 && i < len(dailyTime); i++ {
-		t, _ := time.Parse("2006-01-02", dailyTime[i].(string))
+		timeStr, ok := dailyTime[i].(string)
+		if !ok {
+			continue
+		}
+		t, err := time.Parse("2006-01-02", timeStr)
+		if err != nil {
+			continue
+		}
 		dayName := t.Format("Mon")
 		if i == 0 {
 			dayName = "Today"
-		} else if t.Day() == now.Day() {
+		} else if t.Year() == tomorrow.Year() && t.Month() == tomorrow.Month() && t.Day() == tomorrow.Day() {
 			dayName = "Tomorrow"
 		}
 		forecast = append(forecast, map[string]interface{}{
 			"day": dayName,
 			"icon": map[string]interface{}{
-				"id": dailyWeatherCode[i],
+				"id": safeIndex(dailyWeatherCode, i),
 			},
 			"temperature": map[string]interface{}{
-				"max": dailyTempMax[i],
-				"min": dailyTempMin[i],
+				"max": safeIndex(dailyTempMax, i),
+				"min": safeIndex(dailyTempMin, i),
 			},
 		})
 	}
@@ -181,7 +299,7 @@ func SearchLyrics(w http.ResponseWriter, r *http.Request) {
 
 	// Use LRCLib search API (fuzzy matching)
 	apiURL := fmt.Sprintf("https://lrclib.net/api/search?q=%s", url.QueryEscape(query))
-	resp, err := http.Get(apiURL)
+	resp, err := httpClient.Get(apiURL)
 	if err != nil {
 		writeApiResponse(w, map[string]interface{}{
 			"status":  2,
@@ -191,10 +309,23 @@ func SearchLyrics(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "failed to read lyrics response",
+		}, startTime)
+		return
+	}
 
 	var results []map[string]interface{}
-	json.Unmarshal(body, &results)
+	if err := json.Unmarshal(body, &results); err != nil {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "failed to parse lyrics response",
+		}, startTime)
+		return
+	}
 
 	if len(results) == 0 {
 		writeApiResponse(w, map[string]interface{}{
@@ -207,10 +338,8 @@ func SearchLyrics(w http.ResponseWriter, r *http.Request) {
 	// Use the first result
 	result := results[0]
 
-	lyrics := ""
-	if result["plainLyrics"] != nil {
-		lyrics = result["plainLyrics"].(string)
-	}
+	// Safe type assertion for lyrics
+	lyrics, _ := result["plainLyrics"].(string)
 
 	if lyrics == "" {
 		writeApiResponse(w, map[string]interface{}{
@@ -220,27 +349,21 @@ func SearchLyrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Safe type assertions for track info
 	trackName := ""
-	if result["trackName"] != nil {
-		trackName = result["trackName"].(string)
-	} else if result["name"] != nil {
-		trackName = result["name"].(string)
+	if v, ok := result["trackName"].(string); ok {
+		trackName = v
+	} else if v, ok := result["name"].(string); ok {
+		trackName = v
 	}
 
-	artistName := ""
-	if result["artistName"] != nil {
-		artistName = result["artistName"].(string)
-	}
-
-	albumName := ""
-	if result["albumName"] != nil {
-		albumName = result["albumName"].(string)
-	}
+	artistName, _ := result["artistName"].(string)
+	albumName, _ := result["albumName"].(string)
 
 	writeApiResponse(w, map[string]interface{}{
 		"status":          0,
 		"lyrics":          lyrics,
-		"lyrics_provider": 3, // LRCLIB
+		"lyrics_provider": LyricsProviderLRCLIB,
 		"track": map[string]interface{}{
 			"title":  trackName,
 			"artist": artistName,
@@ -263,7 +386,7 @@ func SearchUrbanDictionary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiURL := fmt.Sprintf("https://api.urbandictionary.com/v0/define?term=%s", url.QueryEscape(q))
-	resp, err := http.Get(apiURL)
+	resp, err := httpClient.Get(apiURL)
 	if err != nil {
 		writeApiResponse(w, map[string]interface{}{
 			"status":  2,
@@ -273,10 +396,23 @@ func SearchUrbanDictionary(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "failed to read response body",
+		}, startTime)
+		return
+	}
 
 	var udData map[string]interface{}
-	json.Unmarshal(body, &udData)
+	if err := json.Unmarshal(body, &udData); err != nil {
+		writeApiResponse(w, map[string]interface{}{
+			"status":  2,
+			"message": "failed to parse response",
+		}, startTime)
+		return
+	}
 
 	results := []interface{}{}
 	if list, ok := udData["list"].([]interface{}); ok {
