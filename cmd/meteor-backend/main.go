@@ -2,13 +2,26 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/meteor-discord/backend/internal/handler"
 )
 
+type ApiResponse struct {
+	Timings  string      `json:"timings"`
+	Response interface{} `json:"response"`
+}
+
 func main() {
+	log.Println("Starting meteor-backend server...")
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -53,14 +66,14 @@ func main() {
 	r.Get("/search/google-maps-supplemental", handleNotImplemented)
 	r.Get("/search/google-news", handleNotImplemented)
 	r.Get("/search/google-news-supplemental", handleNotImplemented)
-	r.Get("/search/lyrics", handleNotImplemented)
+	r.Get("/search/lyrics", handler.SearchLyrics)
 	r.Get("/search/quora", handleNotImplemented)
 	r.Get("/search/quora-result", handleNotImplemented)
 	r.Get("/search/reddit", handleNotImplemented)
 	r.Get("/search/reverse-image", handleNotImplemented)
 	r.Get("/search/booru", handleNotImplemented)
-	r.Get("/search/urbandictionary", handleNotImplemented)
-	r.Get("/search/weather", handleNotImplemented)
+	r.Get("/search/urbandictionary", handler.SearchUrbanDictionary)
+	r.Get("/search/weather", handler.SearchWeather)
 	r.Get("/search/wikihow", handleNotImplemented)
 	r.Get("/search/wolfram-alpha", handleNotImplemented)
 	r.Get("/search/wolfram-supplemental", handleNotImplemented)
@@ -86,13 +99,33 @@ func main() {
 	r.Get("/utils/screenshot", handleNotImplemented)
 	r.Get("/utils/text-generator", handleNotImplemented)
 	r.Get("/utils/unicode-metadata", handleNotImplemented)
-	r.Get("/utils/weather", handleNotImplemented)
+	r.Get("/utils/weather", handler.SearchWeather)
 	r.Get("/utils/webshot", handleNotImplemented)
 
-	http.ListenAndServe(":8080", r)
+	port := ":8081"
+	log.Printf("Server listening on %s", port)
+
+	go func() {
+		if err := http.ListenAndServe(port, r); err != nil {
+			log.Printf("Server error: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+	time.Sleep(500 * time.Millisecond)
+	log.Println("Server stopped")
 }
 
 func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"error": "not implemented"})
+	response := ApiResponse{
+		Timings:  time.Since(startTime).String(),
+		Response: map[string]interface{}{"body": map[string]interface{}{"status": 2, "message": "not implemented"}},
+	}
+	json.NewEncoder(w).Encode(response)
 }
