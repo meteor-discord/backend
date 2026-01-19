@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,11 +14,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/meteor-discord/backend/internal/handler"
 )
-
-type ApiResponse struct {
-	Timings  string      `json:"timings"`
-	Response interface{} `json:"response"`
-}
 
 func main() {
 	log.Println("Starting meteor-backend server...")
@@ -123,9 +119,11 @@ func main() {
 func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	w.Header().Set("Content-Type", "application/json")
-	response := ApiResponse{
-		Timings:  time.Since(startTime).String(),
+	response := handler.ApiResponse{
+		Timings:  fmt.Sprintf("%.2f", time.Since(startTime).Seconds()),
 		Response: map[string]interface{}{"body": map[string]interface{}{"status": 2, "message": "not implemented"}},
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode not implemented response: %v", err)
+	}
 }
