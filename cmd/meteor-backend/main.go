@@ -106,11 +106,11 @@ func main() {
 		r.Get("/utils/mapkit", handleNotImplemented)
 		r.Get("/utils/otter", handleNotImplemented)
 		r.Get("/utils/perspective", handleNotImplemented)
-		r.Get("/utils/screenshot", handleNotImplemented)
+		r.Get("/utils/screenshot", handler.Screenshot)
 		r.Get("/utils/text-generator", handleNotImplemented)
 		r.Get("/utils/unicode-metadata", handleNotImplemented)
 		r.Get("/utils/weather", handler.SearchWeather)
-		r.Get("/utils/webshot", handleNotImplemented)
+		r.Get("/utils/webshot", handler.Webshot)
 	})
 
 	port := ":8081"
