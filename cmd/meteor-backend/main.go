@@ -17,11 +17,6 @@ import (
 	authmw "github.com/meteor-discord/backend/internal/middleware"
 )
 
-type ApiResponse struct {
-	Timings  string      `json:"timings"`
-	Response interface{} `json:"response"`
-}
-
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
@@ -155,5 +150,7 @@ func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
 		Timings:  time.Since(startTime).String(),
 		Response: map[string]interface{}{"body": map[string]interface{}{"status": 2, "message": "not implemented"}},
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode not implemented response: %v", err)
+	}
 }
