@@ -321,6 +321,12 @@ func SearchMaps(w http.ResponseWriter, r *http.Request) {
 		writeSearchJSONError(w, StatusError, "failed to fetch location")
 		return
 	}
+	if resp.StatusCode != http.StatusOK {
+		// Ensure the body is closed before returning on non-OK responses.
+		resp.Body.Close()
+		writeSearchJSONError(w, StatusError, fmt.Sprintf("failed to fetch location: status code %d", resp.StatusCode))
+		return
+	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
