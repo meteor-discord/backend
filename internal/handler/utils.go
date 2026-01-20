@@ -17,6 +17,7 @@ const (
 	screenshotTimeout   = 30 * time.Second
 	screenshotWidth     = 1024
 	screenshotHeight    = 1024
+	screenshotAssetBase = "https://cdn.roxyproxy.de/assets/errors/"
 )
 
 var blockedDomains = []string{
