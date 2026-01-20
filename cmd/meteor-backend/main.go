@@ -141,15 +141,3 @@ func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
 		log.Printf("failed to encode not implemented response: %v", err)
 	}
 }
-
-func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
-	startTime := time.Now()
-	w.Header().Set("Content-Type", "application/json")
-	response := ApiResponse{
-		Timings:  time.Since(startTime).String(),
-		Response: map[string]interface{}{"body": map[string]interface{}{"status": 2, "message": "not implemented"}},
-	}
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("failed to encode not implemented response: %v", err)
-	}
-}
