@@ -456,7 +456,8 @@ func SearchNews(w http.ResponseWriter, r *http.Request) {
 		query = "top stories"
 	}
 
-	searchURL := fmt.Sprintf("https://html.duckduckgo.com/html/?q=%s+news&kl=us-en", url.QueryEscape(query))
+	combinedQuery := query + " news"
+	searchURL := fmt.Sprintf("https://html.duckduckgo.com/html/?q=%s&kl=us-en", url.QueryEscape(combinedQuery))
 
 	doc, err := fetchDDGHTML(searchURL)
 	if err != nil {
