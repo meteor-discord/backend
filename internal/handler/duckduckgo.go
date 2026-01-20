@@ -246,6 +246,10 @@ func SearchDuckDuckGoImages(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		writeSearchJSONError(w, StatusError, fmt.Sprintf("unexpected status code: %d", resp.StatusCode))
+		return
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		writeSearchJSONError(w, StatusError, "failed to read response")
