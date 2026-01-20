@@ -70,8 +70,7 @@ func main() {
 		r.Get("/search/bing", handleNotImplemented)
 		r.Get("/search/bing-images", handleNotImplemented)
 		r.Get("/search/duckduckgo", handler.SearchDuckDuckGo)
-		r.Get("/search/google", handler.SearchDuckDuckGo)
-		r.Get("/search/google-images", handler.SearchDuckDuckGoImages)
+		r.Get("/search/duckduckgo-images", handler.SearchDuckDuckGoImages)
 		r.Get("/search/google-maps", handler.SearchMaps)
 		r.Get("/search/google-maps-supplemental", handler.SearchMapsSupplemental)
 		r.Get("/search/google-news", handler.SearchNews)
@@ -136,6 +135,18 @@ func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	response := handler.ApiResponse{
 		Timings:  fmt.Sprintf("%.2f", time.Since(startTime).Seconds()),
+		Response: map[string]interface{}{"body": map[string]interface{}{"status": 2, "message": "not implemented"}},
+	}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode not implemented response: %v", err)
+	}
+}
+
+func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	w.Header().Set("Content-Type", "application/json")
+	response := ApiResponse{
+		Timings:  time.Since(startTime).String(),
 		Response: map[string]interface{}{"body": map[string]interface{}{"status": 2, "message": "not implemented"}},
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
