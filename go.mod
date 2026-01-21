@@ -7,6 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.4
 	github.com/go-rod/rod v0.116.2
 	github.com/joho/godotenv v1.5.1
+	golang.org/x/text v0.33.0
 )
 
 require (

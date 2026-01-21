@@ -41,19 +41,16 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(authmw.Auth(apiKey))
 
-		// Google routes
 		r.Post("/google/translate/text", handleNotImplemented)
 		r.Get("/google/vision/labels", handleNotImplemented)
 		r.Post("/google/vision/ocr", handleNotImplemented)
 		r.Get("/google/vision/safety", handleNotImplemented)
 
-		// Omni routes
 		r.Get("/omni/anime", handleNotImplemented)
 		r.Get("/omni/anime-supplemental", handleNotImplemented)
 		r.Get("/omni/manga", handleNotImplemented)
 		r.Get("/omni/movie", handleNotImplemented)
 
-		// Search routes
 		r.Get("/search/duckduckgo", handler.SearchDuckDuckGo)
 		r.Get("/search/duckduckgo-images", handler.SearchDuckDuckGoImages)
 		r.Get("/search/google-maps", handler.SearchMaps)
@@ -66,28 +63,34 @@ func main() {
 		r.Get("/search/reverse-image", handleNotImplemented)
 		r.Get("/search/booru", handleNotImplemented)
 		r.Get("/search/urbandictionary", handler.SearchUrbanDictionary)
-		r.Get("/search/wikihow", handleNotImplemented)
+		r.Get("/search/weather", handler.SearchWeather)
+		r.Get("/search/wikihow", handler.SearchWikihow)
 		r.Get("/search/wolfram-alpha", handleNotImplemented)
 		r.Get("/search/wolfram-supplemental", handleNotImplemented)
-		r.Get("/search/youtube", handleNotImplemented)
+		r.Get("/search/youtube", handler.SearchYoutube)
 
-		// TTS routes
 		r.Get("/tts/imtranslator", handleNotImplemented)
 		r.Get("/tts/moonbase", handleNotImplemented)
 		r.Get("/tts/playht", handleNotImplemented)
 		r.Get("/tts/tiktok", handleNotImplemented)
 
-		// Utils routes
 		r.Get("/utils/dictionary", handleNotImplemented)
+		r.Get("/utils/dictionary-v2", handler.GetDictionary)
 		r.Get("/utils/emojipedia", handleNotImplemented)
 		r.Get("/utils/emoji-search", handleNotImplemented)
-		r.Get("/utils/garfield", handleNotImplemented)
-		r.Get("/utils/otter", handleNotImplemented)
+		r.Get("/utils/garfield", handler.GetGarfield)
+		r.Get("/utils/gpt", handleNotImplemented)
+		r.Get("/utils/grok", handleNotImplemented)
+		r.Get("/utils/inferkit", handleNotImplemented)
+		r.Get("/utils/mapkit", handleNotImplemented)
+		r.Get("/utils/otter", handler.GetOtter)
 		r.Get("/utils/perspective", handleNotImplemented)
-		r.Get("/utils/unicode-metadata", handleNotImplemented)
+		r.Get("/utils/screenshot", handler.Screenshot)
+		r.Get("/utils/text-generator", handleNotImplemented)
+		r.Get("/utils/unicode-metadata", handler.GetUnicodeMetadata)
+		r.Get("/utils/weather", handler.SearchWeather)
 		r.Get("/utils/webshot", handler.Webshot)
 
-		// LLM routes
 		r.Get("/llm/_private:bard", handleNotImplemented)
 		r.Get("/parrot/google:gemini", handleNotImplemented)
 	})
@@ -121,3 +124,4 @@ func handleNotImplemented(w http.ResponseWriter, r *http.Request) {
 		log.Printf("failed to encode not implemented response: %v", err)
 	}
 }
+

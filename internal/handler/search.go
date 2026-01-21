@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -356,6 +357,134 @@ func SearchUrbanDictionary(w http.ResponseWriter, r *http.Request) {
 	rw.write(map[string]interface{}{
 		"status":  status,
 		"message": message,
+		"results": results,
+	})
+}
+
+type wikihowSearchEntry struct {
+	Ns        int    `json:"ns"`
+	Title     string `json:"title"`
+	PageID    int    `json:"pageid"`
+	Size      int    `json:"size"`
+	WordCount int    `json:"wordcount"`
+	Snippet   string `json:"snippet"`
+	Timestamp string `json:"timestamp"`
+}
+
+type wikihowResponse struct {
+	Query struct {
+		Search []wikihowSearchEntry `json:"search"`
+	} `json:"query"`
+}
+
+func SearchWikihow(w http.ResponseWriter, r *http.Request) {
+	rw := newResponseWriter(w, time.Now())
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		rw.writeError(StatusError, "missing 'q' query parameter")
+		return
+	}
+
+	apiURL := fmt.Sprintf("https://www.wikihow.com/api.php?action=query&format=json&list=search&srsearch=%s", url.QueryEscape(query))
+	var whResponse wikihowResponse
+	if err := fetchJSON(apiURL, &whResponse); err != nil {
+		rw.writeError(StatusError, "failed to fetch wikihow results")
+		return
+	}
+
+	results := make([]map[string]interface{}, 0, len(whResponse.Query.Search))
+	for _, entry := range whResponse.Query.Search {
+		// Basic HTML tag stripping for snippet could be improved, but this is a start
+		snippet := stripHTML(entry.Snippet)
+		results = append(results, map[string]interface{}{
+			"title":   entry.Title,
+			"url":     fmt.Sprintf("https://www.wikihow.com/%s", strings.ReplaceAll(entry.Title, " ", "-")),
+			"snippet": snippet,
+		})
+	}
+
+	status := StatusSuccess
+	if len(results) == 0 {
+		status = StatusNotFound
+	}
+
+	rw.write(map[string]interface{}{
+		"status":  status,
+		"results": results,
+	})
+}
+
+func stripHTML(s string) string {
+	// Simple regex to strip HTML tags
+	// In a real app, use a proper HTML parser
+	// This strips anything between < and >
+	var output strings.Builder
+	inTag := false
+	for _, r := range s {
+		if r == '<' {
+			inTag = true
+			continue
+		}
+		if r == '>' {
+			inTag = false
+			continue
+		}
+		if !inTag {
+			output.WriteRune(r)
+		}
+	}
+	return output.String()
+}
+
+type invidiousVideo struct {
+	Title         string `json:"title"`
+	VideoID       string `json:"videoId"`
+	Author        string `json:"author"`
+	LengthSeconds int64  `json:"lengthSeconds"`
+	ViewCount     int64  `json:"viewCount"`
+	PublishedText string `json:"publishedText"`
+}
+
+func SearchYoutube(w http.ResponseWriter, r *http.Request) {
+	rw := newResponseWriter(w, time.Now())
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		rw.writeError(StatusError, "missing 'q' query parameter")
+		return
+	}
+
+	// Using a public Invidious instance
+	// Fallback instances could be implemented
+	instance := "https://inv.tux.pizza"
+	apiURL := fmt.Sprintf("%s/api/v1/search?q=%s&type=video", instance, url.QueryEscape(query))
+
+	var videos []invidiousVideo
+	if err := fetchJSON(apiURL, &videos); err != nil {
+		rw.writeError(StatusError, "failed to fetch youtube results")
+		return
+	}
+
+	results := make([]map[string]interface{}, 0, len(videos))
+	for _, v := range videos {
+		results = append(results, map[string]interface{}{
+			"title":    v.Title,
+			"url":      fmt.Sprintf("https://www.youtube.com/watch?v=%s", v.VideoID),
+			"author":   v.Author,
+			"duration": v.LengthSeconds,
+			"views":    v.ViewCount,
+			"date":     v.PublishedText,
+		})
+	}
+
+	status := StatusSuccess
+	if len(results) == 0 {
+		status = StatusNotFound
+	}
+
+	rw.write(map[string]interface{}{
+		"status":  status,
 		"results": results,
 	})
 }
